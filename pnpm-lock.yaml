@@ -363,6 +363,8 @@ importers:
 
   extensions/exa: {}
 
+  extensions/executive-assistant: {}
+
   extensions/fal: {}
 
   extensions/feishu:

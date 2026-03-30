@@ -1,0 +1,159 @@
+{
+  "id": "executive-assistant",
+  "uiHints": {
+    "defaults.timezone": {
+      "label": "Assistant Timezone",
+      "help": "Optional timezone label included in briefing payloads.",
+      "placeholder": "America/Chicago"
+    },
+    "defaults.lookaheadDays": {
+      "label": "Default Calendar Window",
+      "help": "Default number of days to scan when the model does not provide an explicit end time.",
+      "placeholder": "3"
+    },
+    "defaults.maxCalendarResults": {
+      "label": "Max Calendar Results",
+      "help": "Default maximum number of events returned per provider."
+    },
+    "defaults.maxMailResults": {
+      "label": "Max Mail Results",
+      "help": "Default maximum number of email results returned per provider."
+    },
+    "google.accessToken": {
+      "label": "Google Access Token",
+      "help": "OAuth access token for Google Calendar and Gmail. You can also use ${OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_ACCESS_TOKEN}.",
+      "sensitive": true,
+      "placeholder": "ya29..."
+    },
+    "google.calendarIds": {
+      "label": "Google Calendar IDs",
+      "help": "Calendars to read. Defaults to [\"primary\"]."
+    },
+    "google.writableCalendarIds": {
+      "label": "Writable Google Calendar IDs",
+      "help": "Explicit allowlist for calendar writes. Leave empty to keep Google calendar writes disabled."
+    },
+    "microsoft.accessToken": {
+      "label": "Microsoft Graph Access Token",
+      "help": "OAuth access token for Microsoft Graph calendar and mail. You can also use ${OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_ACCESS_TOKEN}.",
+      "sensitive": true,
+      "placeholder": "eyJ..."
+    },
+    "microsoft.userId": {
+      "label": "Graph User ID",
+      "help": "Use \"me\" for delegated tokens or a specific user id for app-routed Graph access.",
+      "placeholder": "me"
+    },
+    "microsoft.calendarIds": {
+      "label": "Microsoft Calendar IDs",
+      "help": "Calendars to read. Defaults to [\"default\"]."
+    },
+    "microsoft.writableCalendarIds": {
+      "label": "Writable Microsoft Calendar IDs",
+      "help": "Explicit allowlist for calendar writes. Leave empty to keep Microsoft calendar writes disabled."
+    }
+  },
+  "contracts": {
+    "tools": [
+      "calendar_list_events",
+      "calendar_find_conflicts",
+      "calendar_create_personal_event",
+      "mail_search_readonly",
+      "mail_get_thread",
+      "briefing_daily"
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "defaults": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "lookaheadDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "maxCalendarResults": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "maxMailResults": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        }
+      },
+      "google": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "accessToken": {
+            "type": ["string", "object"]
+          },
+          "calendarEnabled": {
+            "type": "boolean"
+          },
+          "mailEnabled": {
+            "type": "boolean"
+          },
+          "calendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "writableCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "microsoft": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "accessToken": {
+            "type": ["string", "object"]
+          },
+          "userId": {
+            "type": "string"
+          },
+          "calendarEnabled": {
+            "type": "boolean"
+          },
+          "mailEnabled": {
+            "type": "boolean"
+          },
+          "calendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "writableCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
