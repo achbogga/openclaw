@@ -1,5 +1,18 @@
 {
   "id": "executive-assistant",
+  "enabledByDefault": true,
+  "providers": ["executive-assistant-google", "executive-assistant-microsoft"],
+  "providerAuthEnvVars": {
+    "executive-assistant-google": [
+      "OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_CLIENT_ID",
+      "OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_CLIENT_SECRET"
+    ],
+    "executive-assistant-microsoft": [
+      "OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_CLIENT_ID",
+      "OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_TENANT_ID",
+      "OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_CLIENT_SECRET"
+    ]
+  },
   "uiHints": {
     "defaults.timezone": {
       "label": "Assistant Timezone",
@@ -21,9 +34,13 @@
     },
     "google.accessToken": {
       "label": "Google Access Token",
-      "help": "OAuth access token for Google Calendar and Gmail. You can also use ${OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_ACCESS_TOKEN}.",
+      "help": "Legacy direct access token fallback for Google Calendar and Gmail. Prefer google.authProfileId from `openclaw executive-assistant auth google`. You can also use ${OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_ACCESS_TOKEN}.",
       "sensitive": true,
       "placeholder": "ya29..."
+    },
+    "google.authProfileId": {
+      "label": "Google Auth Profile",
+      "help": "Preferred Google OAuth profile id created by `openclaw executive-assistant auth google`."
     },
     "google.calendarIds": {
       "label": "Google Calendar IDs",
@@ -35,9 +52,13 @@
     },
     "microsoft.accessToken": {
       "label": "Microsoft Graph Access Token",
-      "help": "OAuth access token for Microsoft Graph calendar and mail. You can also use ${OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_ACCESS_TOKEN}.",
+      "help": "Legacy direct access token fallback for Microsoft Graph calendar and mail. Prefer microsoft.authProfileId from `openclaw executive-assistant auth microsoft`. You can also use ${OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_ACCESS_TOKEN}.",
       "sensitive": true,
       "placeholder": "eyJ..."
+    },
+    "microsoft.authProfileId": {
+      "label": "Microsoft Auth Profile",
+      "help": "Preferred Microsoft OAuth profile id created by `openclaw executive-assistant auth microsoft`."
     },
     "microsoft.userId": {
       "label": "Graph User ID",
@@ -98,6 +119,9 @@
           "enabled": {
             "type": "boolean"
           },
+          "authProfileId": {
+            "type": "string"
+          },
           "accessToken": {
             "type": ["string", "object"]
           },
@@ -127,6 +151,9 @@
         "properties": {
           "enabled": {
             "type": "boolean"
+          },
+          "authProfileId": {
+            "type": "string"
           },
           "accessToken": {
             "type": ["string", "object"]

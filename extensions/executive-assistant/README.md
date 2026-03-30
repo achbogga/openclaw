@@ -17,6 +17,33 @@ Design constraints:
 - Mail is read-only.
 - Calendar writes are disabled by default and only work on explicit `writableCalendarIds`.
 - `calendar_create_personal_event` requires `confirm=true`, so the model has to gather user confirmation before writing.
+- The plugin is enabled by default so OAuth onboarding is available immediately, but the assistant tools only activate after at least one provider is configured.
+
+## OAuth Onboarding
+
+Preferred path:
+
+```bash
+openclaw executive-assistant auth google
+openclaw executive-assistant auth microsoft
+```
+
+Equivalent native OpenClaw auth commands:
+
+```bash
+openclaw models auth login --provider executive-assistant-google
+openclaw models auth login --provider executive-assistant-microsoft
+```
+
+OAuth client env vars:
+
+- `OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_CLIENT_ID`
+- `OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_CLIENT_SECRET`
+- `OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_CLIENT_ID`
+- `OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_TENANT_ID`
+- `OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_CLIENT_SECRET`
+
+Legacy direct access-token fallback is still supported, but it is no longer the preferred path.
 
 ## Config
 
@@ -36,7 +63,6 @@ Configure the plugin under `plugins.entries.executive-assistant.config`:
   plugins: {
     entries: {
       "executive-assistant": {
-        enabled: true,
         config: {
           defaults: {
             timezone: "America/Chicago",
@@ -45,12 +71,12 @@ Configure the plugin under `plugins.entries.executive-assistant.config`:
             maxMailResults: 10,
           },
           google: {
-            accessToken: "${OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_ACCESS_TOKEN}",
+            authProfileId: "executive-assistant-google:you@example.com",
             calendarIds: ["primary"],
             writableCalendarIds: ["primary"],
           },
           microsoft: {
-            accessToken: "${OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_ACCESS_TOKEN}",
+            authProfileId: "executive-assistant-microsoft:you@company.com",
             userId: "me",
             calendarIds: ["default"],
             writableCalendarIds: [],
@@ -62,7 +88,7 @@ Configure the plugin under `plugins.entries.executive-assistant.config`:
 }
 ```
 
-Token env vars:
+Legacy token env vars:
 
 - `OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_ACCESS_TOKEN`
 - `OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_ACCESS_TOKEN`

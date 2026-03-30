@@ -3,6 +3,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestPluginApi } from "../../../test/helpers/plugins/plugin-api.js";
 import { createExecutiveAssistantTools } from "./tools.js";
 
+const mocks = vi.hoisted(() => ({
+  loadAuthProfileStoreForRuntime: vi.fn(() => ({ profiles: {} })),
+  resolveApiKeyForProfile: vi.fn(),
+}));
+
+vi.mock("openclaw/plugin-sdk/agent-runtime", () => ({
+  loadAuthProfileStoreForRuntime: mocks.loadAuthProfileStoreForRuntime,
+  resolveApiKeyForProfile: mocks.resolveApiKeyForProfile,
+}));
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -20,8 +30,12 @@ function createApi(config?: Record<string, unknown>) {
   }) as OpenClawPluginApi;
 }
 
-function findTool(name: string, config?: Record<string, unknown>) {
-  const tools = createExecutiveAssistantTools(createApi(config));
+function findTool(
+  name: string,
+  config?: Record<string, unknown>,
+  context?: { agentDir?: string; runtimeConfig?: Record<string, unknown> },
+) {
+  const tools = createExecutiveAssistantTools({ api: createApi(config), context });
   const tool = tools.find((entry) => entry.name === name);
   if (!tool) {
     throw new Error(`tool ${name} not found`);
@@ -55,6 +69,9 @@ describe("executive-assistant tools", () => {
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+    mocks.loadAuthProfileStoreForRuntime.mockReset();
+    mocks.loadAuthProfileStoreForRuntime.mockReturnValue({ profiles: {} });
+    mocks.resolveApiKeyForProfile.mockReset();
   });
 
   it("lists calendar events across Google and Microsoft providers", async () => {
@@ -196,6 +213,76 @@ describe("executive-assistant tools", () => {
         expect.objectContaining({ provider: "microsoft", id: "mm-1", threadId: "mt-1" }),
         expect.objectContaining({ provider: "google", id: "gm-1", threadId: "gt-1" }),
       ],
+    });
+  });
+
+  it("resolves auth-profile-backed tokens through the OpenClaw auth store", async () => {
+    mocks.resolveApiKeyForProfile.mockResolvedValue({
+      apiKey: "google-profile-token",
+      provider: "executive-assistant-google",
+      email: "assistant@example.com",
+    });
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        items: [
+          {
+            id: "g-auth-1",
+            summary: "Profile-backed sync",
+            start: { dateTime: "2026-03-31T14:00:00Z" },
+            end: { dateTime: "2026-03-31T14:30:00Z" },
+          },
+        ],
+      }),
+    );
+
+    const tool = findTool(
+      "calendar_list_events",
+      {
+        plugins: {
+          entries: {
+            "executive-assistant": {
+              config: {
+                google: {
+                  authProfileId: "executive-assistant-google:assistant@example.com",
+                  calendarIds: ["primary"],
+                },
+              },
+            },
+          },
+        },
+        auth: {
+          profiles: {
+            "executive-assistant-google:assistant@example.com": {
+              provider: "executive-assistant-google",
+              mode: "oauth",
+            },
+          },
+        },
+      },
+      { agentDir: "/tmp/openclaw-agent" },
+    );
+
+    const result = await tool.execute("call-5", {
+      provider: "google",
+      start_time: "2026-03-31T00:00:00Z",
+      end_time: "2026-04-01T00:00:00Z",
+    });
+
+    expect(mocks.loadAuthProfileStoreForRuntime).toHaveBeenCalledWith("/tmp/openclaw-agent");
+    expect(mocks.resolveApiKeyForProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        profileId: "executive-assistant-google:assistant@example.com",
+        agentDir: "/tmp/openclaw-agent",
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: expect.objectContaining({
+        Authorization: "Bearer google-profile-token",
+      }),
+    });
+    expect(result.details).toMatchObject({
+      events: [expect.objectContaining({ provider: "google", id: "g-auth-1" })],
     });
   });
 });

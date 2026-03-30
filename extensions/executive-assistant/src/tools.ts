@@ -1,5 +1,12 @@
 import { Type } from "@sinclair/typebox";
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-runtime";
+import {
+  loadAuthProfileStoreForRuntime,
+  resolveApiKeyForProfile,
+} from "openclaw/plugin-sdk/agent-runtime";
+import type {
+  OpenClawPluginApi,
+  OpenClawPluginToolContext,
+} from "openclaw/plugin-sdk/plugin-runtime";
 import {
   jsonResult,
   readNumberParam,
@@ -27,10 +34,19 @@ import type {
   MailSearchResult,
   ProviderId,
   ProviderRuntimeConfig,
+  ResolvedProviderRuntimeConfig,
 } from "./types.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PROVIDER_IDS = ["google", "microsoft"] as const;
+export const EXECUTIVE_ASSISTANT_TOOL_NAMES = [
+  "calendar_list_events",
+  "calendar_find_conflicts",
+  "calendar_create_personal_event",
+  "mail_search_readonly",
+  "mail_get_thread",
+  "briefing_daily",
+] as const;
 
 function optionalStringEnum<const T extends readonly string[]>(values: T, description: string) {
   return Type.Optional(
@@ -299,7 +315,7 @@ function resolveDailyWindow(rawDate?: string): {
 }
 
 async function listCalendarEvents(params: {
-  providers: ProviderRuntimeConfig[];
+  providers: ResolvedProviderRuntimeConfig[];
   startTime: string;
   endTime: string;
   maxResults: number;
@@ -414,7 +430,7 @@ function resolveWritableTarget(params: {
 }
 
 async function searchMail(params: {
-  providers: ProviderRuntimeConfig[];
+  providers: ResolvedProviderRuntimeConfig[];
   query: string;
   maxResults: number;
 }): Promise<MailSearchResult[]> {
@@ -438,7 +454,7 @@ async function searchMail(params: {
 }
 
 async function listUnreadMail(params: {
-  providers: ProviderRuntimeConfig[];
+  providers: ResolvedProviderRuntimeConfig[];
   maxResults: number;
 }): Promise<MailSearchResult[]> {
   const results = await Promise.all(
@@ -452,7 +468,99 @@ async function listUnreadMail(params: {
   return sortMail(results.flat());
 }
 
-export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
+async function resolveProviderAccessToken(params: {
+  runtimeConfig: OpenClawPluginToolContext["runtimeConfig"] | OpenClawPluginApi["config"];
+  provider: ProviderRuntimeConfig;
+  agentDir?: string;
+}): Promise<ResolvedProviderRuntimeConfig> {
+  if (params.provider.authProfileId) {
+    const store = loadAuthProfileStoreForRuntime(params.agentDir);
+    const resolved = await resolveApiKeyForProfile({
+      cfg: params.runtimeConfig,
+      store,
+      profileId: params.provider.authProfileId,
+      agentDir: params.agentDir,
+    });
+    if (!resolved?.apiKey?.trim()) {
+      throw new Error(
+        `Provider "${params.provider.id}" auth profile "${params.provider.authProfileId}" is unavailable. Re-run \`openclaw executive-assistant auth ${params.provider.id}\` or \`openclaw models auth login --provider ${
+          params.provider.id === "google"
+            ? "executive-assistant-google"
+            : "executive-assistant-microsoft"
+        }\`.`,
+      );
+    }
+    return {
+      ...params.provider,
+      accessToken: resolved.apiKey,
+    };
+  }
+
+  if (!params.provider.accessToken?.trim()) {
+    throw new Error(
+      `Provider "${params.provider.id}" is configured without an access token or auth profile.`,
+    );
+  }
+  return {
+    ...params.provider,
+    accessToken: params.provider.accessToken,
+  };
+}
+
+async function resolveProvidersForCapability(params: {
+  runtimeConfig: OpenClawPluginToolContext["runtimeConfig"] | OpenClawPluginApi["config"];
+  config: ExecutiveAssistantRuntimeConfig;
+  capability: "calendar" | "mail";
+  providerId?: string;
+  agentDir?: string;
+}): Promise<ResolvedProviderRuntimeConfig[]> {
+  const providers = requireConfiguredProviders(params.config, params.capability, params.providerId);
+  return await Promise.all(
+    providers.map(
+      async (provider) =>
+        await resolveProviderAccessToken({
+          runtimeConfig: params.runtimeConfig,
+          provider,
+          agentDir: params.agentDir,
+        }),
+    ),
+  );
+}
+
+async function resolveWritableProviderTarget(params: {
+  runtimeConfig: OpenClawPluginToolContext["runtimeConfig"] | OpenClawPluginApi["config"];
+  config: ExecutiveAssistantRuntimeConfig;
+  providerId?: string;
+  calendarId?: string;
+  agentDir?: string;
+}): Promise<{ provider: ResolvedProviderRuntimeConfig; calendarId: string }> {
+  const target = resolveWritableTarget({
+    config: params.config,
+    providerId: params.providerId,
+    calendarId: params.calendarId,
+  });
+  return {
+    provider: await resolveProviderAccessToken({
+      runtimeConfig: params.runtimeConfig,
+      provider: target.provider,
+      agentDir: params.agentDir,
+    }),
+    calendarId: target.calendarId,
+  };
+}
+
+type ExecutiveAssistantToolFactoryParams = {
+  api: OpenClawPluginApi;
+  context?: Pick<OpenClawPluginToolContext, "agentDir" | "runtimeConfig">;
+};
+
+export function createExecutiveAssistantTools(params: ExecutiveAssistantToolFactoryParams) {
+  const runtimeConfig = params.context?.runtimeConfig ?? params.api.config;
+  const config = resolveExecutiveAssistantRuntimeConfig(runtimeConfig);
+  if (config.providers.length === 0) {
+    return [];
+  }
+
   return [
     {
       name: "calendar_list_events",
@@ -461,7 +569,6 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
         "Read Google Calendar and Microsoft calendar events across the configured accounts. Use this before proposing times or creating an event.",
       parameters: CalendarWindowSchema,
       execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
-        const config = resolveExecutiveAssistantRuntimeConfig(api.config);
         const providerId = readStringParam(rawParams, "provider");
         const calendarIds = readStringArrayParam(rawParams, "calendar_ids");
         if (calendarIds && !providerId) {
@@ -469,7 +576,13 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
             "calendar_ids requires provider so the target calendars are unambiguous.",
           );
         }
-        const providers = requireConfiguredProviders(config, "calendar", providerId);
+        const providers = await resolveProvidersForCapability({
+          runtimeConfig,
+          config,
+          capability: "calendar",
+          providerId,
+          agentDir: params.context?.agentDir,
+        });
         const maxResults =
           readNumberParam(rawParams, "max_results", { integer: true }) ?? config.maxCalendarResults;
         const window = resolveCalendarWindow(rawParams, config);
@@ -494,7 +607,6 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
         "Check whether a proposed time collides with any configured Google or Microsoft calendar event.",
       parameters: ConflictSchema,
       execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
-        const config = resolveExecutiveAssistantRuntimeConfig(api.config);
         const providerId = readStringParam(rawParams, "provider");
         const calendarIds = readStringArrayParam(rawParams, "calendar_ids");
         if (calendarIds && !providerId) {
@@ -513,7 +625,13 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
         if (new Date(endTime).getTime() <= new Date(startTime).getTime()) {
           throw new Error("end_time must be later than start_time");
         }
-        const providers = requireConfiguredProviders(config, "calendar", providerId);
+        const providers = await resolveProvidersForCapability({
+          runtimeConfig,
+          config,
+          capability: "calendar",
+          providerId,
+          agentDir: params.context?.agentDir,
+        });
         const events = await listCalendarEvents({
           providers,
           startTime,
@@ -541,10 +659,15 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
             "calendar_create_personal_event requires confirm=true after the user explicitly approves the write.",
           );
         }
-        const config = resolveExecutiveAssistantRuntimeConfig(api.config);
         const providerId = readStringParam(rawParams, "provider");
         const calendarId = readStringParam(rawParams, "calendar_id");
-        const target = resolveWritableTarget({ config, providerId, calendarId });
+        const target = await resolveWritableProviderTarget({
+          runtimeConfig,
+          config,
+          providerId,
+          calendarId,
+          agentDir: params.context?.agentDir,
+        });
         const title = readStringParam(rawParams, "title", { required: true });
         const startTime = parseIso(
           readStringParam(rawParams, "start_time", { required: true }),
@@ -594,10 +717,15 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
         "Search Gmail and Microsoft mail in read-only mode. Use it to find recent threads before reading a full thread.",
       parameters: MailSearchSchema,
       execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
-        const config = resolveExecutiveAssistantRuntimeConfig(api.config);
         const query = readStringParam(rawParams, "query", { required: true });
         const providerId = readStringParam(rawParams, "provider");
-        const providers = requireConfiguredProviders(config, "mail", providerId);
+        const providers = await resolveProvidersForCapability({
+          runtimeConfig,
+          config,
+          capability: "mail",
+          providerId,
+          agentDir: params.context?.agentDir,
+        });
         const maxResults =
           readNumberParam(rawParams, "max_results", { integer: true }) ?? config.maxMailResults;
         const messages = await searchMail({
@@ -618,10 +746,15 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
         "Fetch a full read-only mail thread by provider-native thread id (Gmail thread id or Microsoft conversationId).",
       parameters: MailThreadSchema,
       execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
-        const config = resolveExecutiveAssistantRuntimeConfig(api.config);
         const threadId = readStringParam(rawParams, "thread_id", { required: true });
         const providerId = readStringParam(rawParams, "provider");
-        const providers = requireConfiguredProviders(config, "mail", providerId);
+        const providers = await resolveProvidersForCapability({
+          runtimeConfig,
+          config,
+          capability: "mail",
+          providerId,
+          agentDir: params.context?.agentDir,
+        });
         if (providers.length !== 1) {
           throw new Error(
             "mail_get_thread requires provider when more than one mail provider is configured.",
@@ -642,10 +775,14 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
         "Build a daily briefing using today's calendar agenda plus unread mail across configured Google and Microsoft accounts.",
       parameters: BriefingSchema,
       execute: async (_toolCallId: string, rawParams: Record<string, unknown>) => {
-        const config = resolveExecutiveAssistantRuntimeConfig(api.config);
         const { date, startTime, endTime } = resolveDailyWindow(readStringParam(rawParams, "date"));
         const includeMail = rawParams.include_mail !== false;
-        const calendarProviders = requireConfiguredProviders(config, "calendar");
+        const calendarProviders = await resolveProvidersForCapability({
+          runtimeConfig,
+          config,
+          capability: "calendar",
+          agentDir: params.context?.agentDir,
+        });
         const events = await listCalendarEvents({
           providers: calendarProviders,
           startTime,
@@ -672,7 +809,12 @@ export function createExecutiveAssistantTools(api: OpenClawPluginApi) {
         const unreadMail =
           includeMail && config.providers.some((provider) => provider.mailEnabled)
             ? await listUnreadMail({
-                providers: requireConfiguredProviders(config, "mail"),
+                providers: await resolveProvidersForCapability({
+                  runtimeConfig,
+                  config,
+                  capability: "mail",
+                  agentDir: params.context?.agentDir,
+                }),
                 maxResults:
                   readNumberParam(rawParams, "max_mail_results", { integer: true }) ??
                   Math.min(config.maxMailResults, 5),

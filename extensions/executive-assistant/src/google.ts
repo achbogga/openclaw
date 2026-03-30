@@ -4,7 +4,7 @@ import type {
   MailSearchResult,
   MailThread,
   MailThreadMessage,
-  ProviderRuntimeConfig,
+  ResolvedProviderRuntimeConfig,
 } from "./types.js";
 
 type GoogleCalendarEvent = {
@@ -116,7 +116,7 @@ function extractGoogleBodyText(payload: GoogleMessage["payload"] | undefined): s
 }
 
 function normalizeGoogleEvent(
-  provider: ProviderRuntimeConfig,
+  provider: ResolvedProviderRuntimeConfig,
   calendarId: string,
   event: GoogleCalendarEvent,
 ): CalendarEvent {
@@ -181,7 +181,7 @@ function normalizeGoogleThreadMessage(message: GoogleMessage): MailThreadMessage
 }
 
 export async function listGoogleCalendarEvents(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   startTime: string;
   endTime: string;
   maxResults: number;
@@ -211,7 +211,7 @@ export async function listGoogleCalendarEvents(params: {
 }
 
 export async function createGoogleCalendarEvent(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   calendarId: string;
   title: string;
   startTime: string;
@@ -238,7 +238,7 @@ export async function createGoogleCalendarEvent(params: {
 }
 
 export async function searchGoogleMail(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   query: string;
   maxResults: number;
 }): Promise<MailSearchResult[]> {
@@ -267,7 +267,7 @@ export async function searchGoogleMail(params: {
 }
 
 export async function listGoogleUnreadMail(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   maxResults: number;
 }): Promise<MailSearchResult[]> {
   return await searchGoogleMail({
@@ -278,7 +278,7 @@ export async function listGoogleUnreadMail(params: {
 }
 
 export async function getGoogleMailThread(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   threadId: string;
 }): Promise<MailThread> {
   const thread = await fetchJson<GoogleThreadResponse>({

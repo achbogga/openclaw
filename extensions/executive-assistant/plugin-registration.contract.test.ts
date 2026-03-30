@@ -2,6 +2,7 @@ import { describePluginRegistrationContract } from "../../test/helpers/plugins/p
 
 describePluginRegistrationContract({
   pluginId: "executive-assistant",
+  providerIds: ["executive-assistant-google", "executive-assistant-microsoft"],
   toolNames: [
     "calendar_list_events",
     "calendar_find_conflicts",

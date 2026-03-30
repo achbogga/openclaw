@@ -2,12 +2,17 @@ export type ProviderId = "google" | "microsoft";
 
 export type ProviderRuntimeConfig = {
   id: ProviderId;
-  accessToken: string;
+  authProfileId?: string;
+  accessToken?: string;
   calendarEnabled: boolean;
   mailEnabled: boolean;
   calendarIds: string[];
   writableCalendarIds: string[];
   userId?: string;
+};
+
+export type ResolvedProviderRuntimeConfig = ProviderRuntimeConfig & {
+  accessToken: string;
 };
 
 export type ExecutiveAssistantRuntimeConfig = {

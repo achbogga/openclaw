@@ -12,11 +12,20 @@ import type {
 export const DEFAULT_LOOKAHEAD_DAYS = 3;
 export const DEFAULT_MAX_CALENDAR_RESULTS = 25;
 export const DEFAULT_MAX_MAIL_RESULTS = 10;
+export const GOOGLE_AUTH_PROVIDER_ID = "executive-assistant-google";
+export const MICROSOFT_AUTH_PROVIDER_ID = "executive-assistant-microsoft";
 export const GOOGLE_ACCESS_TOKEN_ENV = "OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_ACCESS_TOKEN";
 export const MICROSOFT_ACCESS_TOKEN_ENV = "OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_ACCESS_TOKEN";
+export const GOOGLE_OAUTH_CLIENT_ID_ENV = "OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_CLIENT_ID";
+export const GOOGLE_OAUTH_CLIENT_SECRET_ENV = "OPENCLAW_EXECUTIVE_ASSISTANT_GOOGLE_CLIENT_SECRET";
+export const MICROSOFT_OAUTH_CLIENT_ID_ENV = "OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_CLIENT_ID";
+export const MICROSOFT_OAUTH_CLIENT_SECRET_ENV =
+  "OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_CLIENT_SECRET";
+export const MICROSOFT_OAUTH_TENANT_ID_ENV = "OPENCLAW_EXECUTIVE_ASSISTANT_MICROSOFT_TENANT_ID";
 
 type RawProviderConfig = {
   enabled?: unknown;
+  authProfileId?: unknown;
   accessToken?: unknown;
   calendarEnabled?: unknown;
   mailEnabled?: unknown;
@@ -90,13 +99,17 @@ function resolveProviderConfig(params: {
 }): ProviderRuntimeConfig | null {
   const raw = params.raw;
   const enabled = raw?.enabled === false ? false : true;
+  const authProfileId =
+    typeof raw?.authProfileId === "string" && raw.authProfileId.trim().length > 0
+      ? raw.authProfileId.trim()
+      : undefined;
   const accessToken = readConfiguredToken(
     raw?.accessToken,
     `plugins.entries.executive-assistant.config.${params.id}.accessToken`,
     params.accessTokenEnv,
   );
 
-  if (!enabled || !accessToken) {
+  if (!enabled || (!authProfileId && !accessToken)) {
     return null;
   }
 
@@ -105,6 +118,7 @@ function resolveProviderConfig(params: {
 
   return {
     id: params.id,
+    authProfileId,
     accessToken,
     calendarEnabled,
     mailEnabled,
@@ -166,6 +180,33 @@ export function resolveExecutiveAssistantRuntimeConfig(
   };
 }
 
+export function buildExecutiveAssistantConfigPatch(params: {
+  providerId: ProviderId;
+  authProfileId: string;
+  userId?: string;
+}): Partial<OpenClawConfig> {
+  const providerConfig: Record<string, unknown> = {
+    enabled: true,
+    authProfileId: params.authProfileId,
+  };
+  if (params.userId) {
+    providerConfig.userId = params.userId;
+  }
+
+  return {
+    plugins: {
+      entries: {
+        "executive-assistant": {
+          enabled: true,
+          config: {
+            [params.providerId]: providerConfig,
+          },
+        },
+      },
+    },
+  };
+}
+
 export function requireProviderConfig(
   config: ExecutiveAssistantRuntimeConfig,
   providerId: ProviderId,
@@ -173,7 +214,7 @@ export function requireProviderConfig(
   const provider = config.providers.find((entry) => entry.id === providerId);
   if (!provider) {
     throw new Error(
-      `Provider "${providerId}" is not configured. Add an access token under plugins.entries.executive-assistant.config.${providerId}.accessToken.`,
+      `Provider "${providerId}" is not configured. Add plugins.entries.executive-assistant.config.${providerId}.authProfileId or .accessToken.`,
     );
   }
   return provider;

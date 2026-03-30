@@ -4,7 +4,7 @@ import type {
   MailSearchResult,
   MailThread,
   MailThreadMessage,
-  ProviderRuntimeConfig,
+  ResolvedProviderRuntimeConfig,
 } from "./types.js";
 
 type GraphDateTime = {
@@ -80,7 +80,7 @@ type ParsedMailQuery = {
   freeText: string[];
 };
 
-function graphUserPath(provider: ProviderRuntimeConfig): string {
+function graphUserPath(provider: ResolvedProviderRuntimeConfig): string {
   if (provider.userId && provider.userId !== "me") {
     return `/users/${encodeURIComponent(provider.userId)}`;
   }
@@ -122,7 +122,7 @@ function formatGraphEmail(message: GraphMessage["from"]): string | undefined {
 }
 
 function normalizeGraphEvent(
-  provider: ProviderRuntimeConfig,
+  provider: ResolvedProviderRuntimeConfig,
   calendarId: string,
   event: GraphCalendarEvent,
 ): CalendarEvent {
@@ -256,7 +256,7 @@ function matchesGraphMessage(message: MailSearchResult, parsed: ParsedMailQuery)
 }
 
 export async function listMicrosoftCalendarEvents(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   startTime: string;
   endTime: string;
   maxResults: number;
@@ -291,7 +291,7 @@ export async function listMicrosoftCalendarEvents(params: {
 }
 
 export async function createMicrosoftCalendarEvent(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   calendarId: string;
   title: string;
   startTime: string;
@@ -329,7 +329,7 @@ export async function createMicrosoftCalendarEvent(params: {
 }
 
 export async function searchMicrosoftMail(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   query: string;
   maxResults: number;
 }): Promise<MailSearchResult[]> {
@@ -356,7 +356,7 @@ export async function searchMicrosoftMail(params: {
 }
 
 export async function listMicrosoftUnreadMail(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   maxResults: number;
 }): Promise<MailSearchResult[]> {
   return await searchMicrosoftMail({
@@ -367,7 +367,7 @@ export async function listMicrosoftUnreadMail(params: {
 }
 
 export async function getMicrosoftMailThread(params: {
-  provider: ProviderRuntimeConfig;
+  provider: ResolvedProviderRuntimeConfig;
   threadId: string;
 }): Promise<MailThread> {
   const userPath = graphUserPath(params.provider);
